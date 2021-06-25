@@ -80,11 +80,19 @@ def run(cmd, **kwargs):
             s = '00:00:00 0.00KB'
         return s
     
-    msg, pmt = kwargs.pop('msg', ''), kwargs.pop('pmt', False)
-    program, cmd = format_cmd(cmd)
+    msg, pmt, fmt_cmd = kwargs.pop('msg', ''), kwargs.pop('pmt', False), kwargs.pop('fmt_cmd', True)
+    log_cmd = kwargs.pop('log_cmd', True)
+    if fmt_cmd:
+        program, cmd = format_cmd(cmd)
+    else:
+        if isinstance(cmd, str):
+            program, cmd = cmd.split()[0], cmd
+        else:
+            program, cmd = cmd[0], ' '.join([str(c) for c in cmd])
     if msg:
         logger.info(msg)
-    logger.debug(cmd)
+    if log_cmd:
+        logger.debug(cmd)
     cwd = kwargs.pop('cwd', None)
     profile_output = tempfile.mktemp(suffix='.txt', prefix='.profile.', dir=cwd)
     try:
@@ -92,8 +100,8 @@ def run(cmd, **kwargs):
             cmd = f'/usr/bin/time -f "%E %M" -o {profile_output} {cmd}'
         process = subprocess.Popen(cmd, universal_newlines=True, shell=True, cwd=cwd,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
-        stdout, stderr = process.communicate()
-        if process.returncode:
+        if process.returncode != 0:
+            stdout, stderr = process.communicate()
             logger.error(f'Failed to run {program} (exit code {process.returncode}):\n{stderr or stdout}')
             sys.exit(process.returncode)
         if msg:
@@ -104,7 +112,7 @@ def run(cmd, **kwargs):
     finally:
         if os.path.isfile(profile_output):
             os.unlink(profile_output)
-    return stdout, stderr
+    return process
 
 
 if __name__ == '__main__':
