@@ -98,9 +98,11 @@ def run(cmd, **kwargs):
     try:
         if msg and (pmt or PMT):
             cmd = f'/usr/bin/time -f "%E %M" -o {profile_output} {cmd}'
-        process = subprocess.Popen(cmd, universal_newlines=True, shell=True, cwd=cwd,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
-        if process.returncode != 0:
+        kwargs['stdout'] = kwargs.pop('stdout', subprocess.PIPE)
+        kwargs['stderr'] = kwargs.pop('stderr', subprocess.PIPE)
+        process = subprocess.Popen(cmd, universal_newlines=True, shell=True, cwd=cwd, **kwargs)
+        process.wait()
+        if process.returncode: 
             stdout, stderr = process.communicate()
             logger.error(f'Failed to run {program} (exit code {process.returncode}):\n{stderr or stdout}')
             sys.exit(process.returncode)
