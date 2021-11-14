@@ -4,7 +4,7 @@
 """
 A shortcut for running shell command.
 """
-
+import argparse
 import subprocess
 import os
 import sys
@@ -115,6 +115,39 @@ def run(cmd, **kwargs):
         if os.path.isfile(profile_output):
             os.unlink(profile_output)
     return process
+
+
+def parse(jobname='', email='', runtime=2, memory=1, cores=1, nodes=1, excludes=None, **kwargs):
+    if excludes:
+        if isinstance(excludes, str):
+            excludes = [excludes]
+        elif isinstance(excludes, (list, tuple)):
+            pass
+        else:
+            logger.warning('Invalid argument excludes, it only accepts a str, list, or tuple, ignored.')
+            excludes = []
+    else:
+        excludes = []
+    parser = argparse.ArgumentParser(**kwargs)
+    if 'jobname' not in excludes:
+        parser.add_argument('--job', help='Name of a job.', default=jobname)
+    if 'email' not in excludes:
+        parser.add_argument('--email', help='Email address for notifying you the start, end, and abor of a job.', default=email)
+    if 'runtime' not in excludes:
+        parser.add_argument('--runtime', type=int, help='Time (in integer hours) for running a job.', default=runtime)
+    if 'memory' not in excludes:
+        parser.add_argument('--memory', type=int, help='Amount of memory (in GB, integer) for all CPU cores.', default=memory)
+    if 'cores' not in excludes:
+        parser.add_argument('--cores', type=int, help='Number of CPU cores on each node can be used for a job.', default=cores)
+    if 'nodes' not in excludes:
+        parser.add_argument('--nodes', type=int, help='Number of nodes can be used for a job.', default=nodes)
+    if 'hold' not in excludes:
+        parser.add_argument('--hold', action='store_true', help='Generate the submit script but hold it without submitting to the job scheduler.')
+    if 'debug' not in excludes:
+        parser.add_argument('--debug', action='store_true', help='Invoke debug mode (for development use only).')
+    if 'dryrun' not in excludes:
+        parser.add_argument('--dryrun', action='store_true', help='Print out steps and IO of each step without actually running the pipeline.')
+    return parser
 
 
 if __name__ == '__main__':
