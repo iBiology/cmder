@@ -81,7 +81,7 @@ def run(cmd, **kwargs):
         return s
     
     msg, pmt, fmt_cmd = kwargs.pop('msg', ''), kwargs.pop('pmt', False), kwargs.pop('fmt_cmd', True)
-    log_cmd = kwargs.pop('log_cmd', True)
+    log_cmd, debug = kwargs.pop('log_cmd', True), kwargs.pop('debug', False)
     if fmt_cmd:
         program, cmd = format_cmd(cmd)
     else:
@@ -98,8 +98,8 @@ def run(cmd, **kwargs):
     try:
         if msg and (pmt or PMT):
             cmd = f'/usr/bin/time -f "%E %M" -o {profile_output} {cmd}'
-        kwargs['stdout'] = kwargs.pop('stdout', subprocess.PIPE)
-        kwargs['stderr'] = kwargs.pop('stderr', subprocess.PIPE)
+        kwargs['stdout'] = kwargs.pop('stdout', sys.stdout if debug else subprocess.PIPE)
+        kwargs['stderr'] = kwargs.pop('stderr', sys.stderr if debug else subprocess.PIPE)
         process = subprocess.Popen(cmd, universal_newlines=True, shell=True, cwd=cwd, **kwargs)
         process.wait()
         if process.returncode: 
