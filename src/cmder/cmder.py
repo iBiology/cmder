@@ -82,6 +82,7 @@ def run(cmd, **kwargs):
     
     msg, pmt, fmt_cmd = kwargs.pop('msg', ''), kwargs.pop('pmt', False), kwargs.pop('fmt_cmd', True)
     log_cmd, debug = kwargs.pop('log_cmd', True), kwargs.pop('debug', False)
+    exit_on_error = kwargs.pop('log_cmd', False)
     if fmt_cmd:
         program, cmd = format_cmd(cmd)
     else:
@@ -105,7 +106,8 @@ def run(cmd, **kwargs):
         if process.returncode: 
             stdout, stderr = process.communicate()
             logger.error(f'Failed to run {program} (exit code {process.returncode}):\n{stderr or stdout}')
-            sys.exit(process.returncode)
+            if exit_on_error:
+                sys.exit(process.returncode)
         if msg:
             msg = msg.replace(' ...', f' complete.')
             if pmt or PMT:
