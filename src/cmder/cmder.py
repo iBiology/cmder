@@ -108,7 +108,7 @@ def run(cmd, **kwargs):
             logger.error(f'Failed to run {program} (exit code {process.returncode}):\n{stderr or stdout}')
             if exit_on_error:
                 sys.exit(process.returncode)
-        if msg:
+        if not process.returncode and msg:
             msg = msg.replace(' ...', f' complete.')
             if pmt or PMT:
                 msg = f'{msg[:-1]} [{parse_profile()}].' if msg.endswith('.') else f'{msg} [{parse_profile()}].'
