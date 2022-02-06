@@ -82,7 +82,7 @@ def run(cmd, **kwargs):
     
     msg, pmt, fmt_cmd = kwargs.pop('msg', ''), kwargs.pop('pmt', False), kwargs.pop('fmt_cmd', True)
     log_cmd, debug = kwargs.pop('log_cmd', True), kwargs.pop('debug', False)
-    exit_on_error = kwargs.pop('log_cmd', False)
+    exit_on_error = kwargs.pop('exit_on_error', False)
     if fmt_cmd:
         program, cmd = format_cmd(cmd)
     else:
