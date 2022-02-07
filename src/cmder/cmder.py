@@ -160,5 +160,19 @@ def parse(jobname='', email='', runtime=2, memory=1, cores=1, nodes=1, excludes=
     return parser
 
 
+def filename(p):
+    if p and not os.path.isfile(p):
+        logger.error(f'Path "{p}" may not be a file or does not exist.')
+        sys.exit(1)
+    return p
+
+
+def dirname(p):
+    if p and not os.path.isdir(p):
+        logger.error(f'Path "{p}" may not be a directory or does not exist.')
+        sys.exit(1)
+    return p
+    
+
 if __name__ == '__main__':
     pass
