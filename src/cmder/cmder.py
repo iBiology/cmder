@@ -117,61 +117,6 @@ def run(cmd, **kwargs):
         if os.path.isfile(profile_output):
             os.unlink(profile_output)
     return process
-
-
-def parse(jobname='', email='', runtime=2, memory=1, cores=1, nodes=1, excludes=None, **kwargs):
-    if excludes:
-        if isinstance(excludes, str):
-            excludes = [excludes]
-        elif isinstance(excludes, (list, tuple)):
-            pass
-        else:
-            logger.warning('Invalid argument excludes, it only accepts a str, list, or tuple, ignored.')
-            excludes = []
-    else:
-        excludes = []
-    parser = argparse.ArgumentParser(**kwargs)
-    if 'jobname' not in excludes:
-        parser.add_argument('--job', help='Name of a job, default: %(default)s.', default=jobname)
-    if 'email' not in excludes:
-        parser.add_argument('--email', default=email,
-                            help='Email address for notifying you the start, end, and abort of a job, '
-                                 'default: %(default)s.')
-    if 'runtime' not in excludes:
-        parser.add_argument('--runtime', type=int, default=runtime,
-                            help='Time (in integer hours) for running a job, default: %(default)s.')
-    if 'memory' not in excludes:
-        parser.add_argument('--memory', type=int, default=memory,
-                            help='Amount of memory (in GB, integer) for all CPU cores, default: %(default)s.')
-    if 'cores' not in excludes:
-        parser.add_argument('--cores', type=int, default=cores,
-                            help='Number of CPU cores on each node can be used for a job, default: %(default)s.')
-    if 'nodes' not in excludes:
-        parser.add_argument('--nodes', type=int, default=nodes,
-                            help='Number of nodes can be used for a job, default: %(default)s.')
-    if 'hold' not in excludes:
-        parser.add_argument('--hold', action='store_true',
-                            help='Generate the submit script but hold it without submitting to the job scheduler.')
-    if 'debug' not in excludes:
-        parser.add_argument('--debug', action='store_true', help='Invoke debug mode (for development use only).')
-    if 'dryrun' not in excludes:
-        parser.add_argument('--dryrun', action='store_true',
-                            help='Print out steps and IO of each step without actually running the pipeline.')
-    return parser
-
-
-def filename(p):
-    if p and not os.path.isfile(p):
-        logger.error(f'Path "{p}" may not be a file or does not exist.')
-        sys.exit(1)
-    return p
-
-
-def dirname(p):
-    if p and not os.path.isdir(p):
-        logger.error(f'Path "{p}" may not be a directory or does not exist.')
-        sys.exit(1)
-    return p
     
 
 if __name__ == '__main__':
