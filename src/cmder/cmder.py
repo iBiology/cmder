@@ -10,6 +10,7 @@ import os
 import sys
 import shlex
 import tempfile
+from pathlib import Path
 
 CMD_LINE_LENGTH = 100
 PMT = False
@@ -137,7 +138,105 @@ def cmd(**kwargs):
             if v:
                 cmds.append(f'--{k} {v}')
     return sep.join(cmds)
-    
+
+
+def submit(command, **kwargs):
+    try:
+        script = Path(kwargs.get('script', 'submit.sh')).resolve()
+        logger.info(f'Generating submission script {script}')
+        nodes = kwargs.get('nodes', 1)
+        ntasks_per_node = kwargs.get('ntasks_per_node', 1)
+        ntasks = kwargs.get('ntasks', 1)
+        queue = kwargs.get('queue', '')
+        day = kwargs.get('day', 1)
+        hour = kwargs.get('hour', 1)
+
+        with script.open('w') as o:
+            o.write('#!/usr/bin/env bash\n')
+            o.write('\n')
+            o.write(f'#SBATCH --nodes={nodes}\n')
+            o.write(f'#SBATCH --ntasks={ntasks}\n')
+            o.write(f'#SBATCH --ntasks-per-node={ntasks_per_node}\n')
+            o.write(f'#SBATCH --time={day}-{hour}:59\n')
+            o.write(f'#SBATCH --partition={queue}\n')
+            
+            cpus_per_node = kwargs.get('cpus_per_node', '')
+            if cpus_per_node:
+                o.write(f'#SBATCH --cpus-per-node={cpus_per_node}\n')
+            
+            gpus_per_node = kwargs.get('gpus_per_node', '')
+            if gpus_per_node:
+                o.write(f'#SBATCH --gpus-per-node={gpus_per_node}\n')
+            
+            array = kwargs.get('array', '')
+            if array:
+                o.write(f'#SBATCH --array={array}\n')
+            
+            name = kwargs.get('name', '')
+            if name:
+                o.write(f'#SBATCH --job-name={name}\n')
+            
+            dependency = kwargs.get('dependency', 0)
+            if dependency:
+                o.write(f'#SBATCH --dependency={dependency}\n')
+                o.write(f'#SBATCH --kill-on-invalid-dep=yes\n')
+            
+            email, mail = kwargs.get('email', ''), kwargs.get('mail', '')
+            email_type, mail_type = kwargs.get('email_type', ''), kwargs.get('mail_type', '')
+            if email or mail:
+                o.write(f'#SBATCH --mail-user={email or mail}\n')
+                o.write(f'#SBATCH --mail-type={email_type or mail_type}\n')
+            
+            log, log_mode = kwargs.get('log', '%x.log'), kwargs.get('log_mode', '')
+            o.write(f'#SBATCH --output={log}\n')
+            if log_mode:
+                o.write(f'#SBATCH --open-mode={log_mode}\n')
+            
+            project, comment = kwargs.get('project', ''), kwargs.get('comment', '')
+            if project and queue != 'gpu-a40':
+                o.write(f'#SBATCH --account={project}\n')
+            if comment:
+                o.write(f'#SBATCH --comment={comment}\n')
+            
+            directives = kwargs.get('directives', [])
+            if directives:
+                for directive in directives:
+                    o.write(f'{directive}\n')
+            
+            environments = kwargs.get('environments', [])
+            if environments:
+                for environment in environments:
+                    o.write(f'{environment}\n')
+            
+            o.write(f'{cmd}\n\n')
+        
+        logger.info(f'Successfully generated submit script {script}')
+        
+        if kwargs.get('hold', False):
+            logger.info(f'Script {script.name} has not been submitted due to hold is True\n')
+            return 0, 0
+        else:
+            envs, env = kwargs.get('envs', {}), os.environ.copy()
+            if envs:
+                for k, v in envs.items():
+                    env[k] = v
+            p = run(f'sbatch {script.name}', cwd=script.parent, env=env)
+            if p.returncode:
+                logger.info(f'Failed to submit {script.name} to job queue due to an error\n')
+                return p.returncode, 0
+            else:
+                s = p.stdout.read()
+                try:
+                    sid = int(s.strip().splitlines()[-1].split()[-1])
+                    logger.info(f'Successfully submitted job with slurm job id {sid}\n')
+                    return 0, sid
+                except Exception as e:
+                    logger.error(f'Failed to get job id from submit result due to {e}:\n\n{s}')
+                    return 0, 0
+    except Exception as e:
+        logger.error(f'Failed to generate submit script and submit the job due to\n{e}\n\n')
+        return 1, 0
+
 
 if __name__ == '__main__':
     pass
