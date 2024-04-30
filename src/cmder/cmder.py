@@ -117,6 +117,26 @@ def run(cmd, **kwargs):
         if os.path.isfile(profile_output):
             os.unlink(profile_output)
     return process
+
+
+def cmd(**kwargs):
+    exe, sep = kwargs.pop('exe', ''), kwargs.pop('sep', ' ')
+    includes, excludes, = kwargs.pop('includes', []), kwargs.pop('excludes', [])
+    if includes:
+        kwargs = {k: v for k, v in kwargs.items() if k in includes}
+    cmds = [exe]
+    for k, v in kwargs.items():
+        if k in excludes:
+            continue
+        if isinstance(v, bool):
+            if v:
+                cmds.append(f'--{k}')
+        elif isinstance(v, (list, tuple, set)):
+            cmds.append(f'--{k} {" ".join(str(x) for x in v)}')
+        else:
+            if v:
+                cmds.append(f'--{k} {v}')
+    return sep.join(cmds)
     
 
 if __name__ == '__main__':
