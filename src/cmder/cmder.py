@@ -12,52 +12,56 @@ import shlex
 import tempfile
 from pathlib import Path
 
-CMD_LINE_LENGTH = 100
+CMD_LINE_LENGTH = 80
 PMT = False
 
 try:
     from loguru import logger
+    
     logger.remove()
     logger.add(sys.stderr, format="<level>{message}</level>", filter=lambda record: record["level"].name == "DEBUG")
     logger.add(sys.stderr, format="<light-green>[{time:HH:mm:ss}]</light-green> <level>{message}</level>", level="INFO")
 except ImportError:
     import logging
+    
     logging.basicConfig(format='[%(asctime)s] %(message)s', datefmt='%H:%M:%S', level=logging.DEBUG)
     logger = logging.getLogger()
 
 
-def run(cmd, **kwargs):
-    """ Run cmd or raise exception if run fails. """
-    def format_cmd(command):
-        if isinstance(command, str):
-            command = shlex.shlex(command, posix=True, punctuation_chars=True)
-            command.whitespace_split = True
-            command = list(command)
-        elif isinstance(command, (list, tuple)):
-            command = [str(c) for c in command]
+def format_cmd(command, max_length=0):
+    if isinstance(command, str):
+        command = shlex.shlex(command, posix=True, punctuation_chars=True)
+        command.whitespace_split = True
+        command = list(command)
+    elif isinstance(command, (list, tuple)):
+        command = [str(c) for c in command]
+    else:
+        raise TypeError('Command only accepts a string or a list (or tuple) of strings.')
+    exe = command[0]
+    if len(' '.join(command)) <= (max_length or CMD_LINE_LENGTH):
+        return exe, ' '.join(command)
+    command = ' '.join([f'\\\n  {c}' if c.startswith('-') or '<' in c or '>' in c else c for c in command])
+    command = command.splitlines()
+    commands = []
+    for i, c in enumerate(command):
+        if i == 0:
+            commands.append(c)
         else:
-            raise TypeError('Command only accepts a string or a list (or tuple) of strings.')
-        exe = command[0]
-        if len(' '.join(command)) <= CMD_LINE_LENGTH:
-            return exe, ' '.join(command)
-        command = ' '.join([f'\\\n  {c}' if c.startswith('-') or '<' in c or '>' in c else c for c in command])
-        command = command.splitlines()
-        commands = []
-        for i, c in enumerate(command):
-            if i == 0:
+            if len(c) <= 80:
                 commands.append(c)
             else:
-                if len(c) <= 80:
-                    commands.append(c)
-                else:
-                    items = c.strip().replace(' \\', '').split()
-                    commands.append(f'  {items[0]} {items[1]} \\')
-                    for item in items[2:]:
-                        commands.append(' ' * (len(items[0]) + 3) + item + ' \\')
-        command = '\n'.join(commands)
-        if command.endswith(' \\'):
-            command = command[:-2]
-        return exe, command
+                items = c.strip().replace(' \\', '').split()
+                commands.append(f'  {items[0]} {items[1]} \\')
+                for item in items[2:]:
+                    commands.append(' ' * (len(items[0]) + 3) + item + ' \\')
+    command = '\n'.join(commands)
+    if command.endswith(' \\'):
+        command = command[:-2]
+    return exe, command
+
+
+def run(cmd, **kwargs):
+    """ Run cmd or raise exception if run fails. """
     
     def parse_profile():
         try:
@@ -102,9 +106,10 @@ def run(cmd, **kwargs):
             cmd = f'/usr/bin/time -f "%E %M" -o {profile_output} {cmd}'
         kwargs['stdout'] = kwargs.pop('stdout', sys.stdout if debug else subprocess.PIPE)
         kwargs['stderr'] = kwargs.pop('stderr', sys.stderr if debug else subprocess.PIPE)
+        timeout = kwargs.pop('timeout', None)
         process = subprocess.Popen(cmd, universal_newlines=True, shell=True, cwd=cwd, **kwargs)
-        process.wait()
-        if process.returncode: 
+        process.wait(timeout)
+        if process.returncode:
             stdout, stderr = process.communicate()
             logger.error(f'Failed to run {program} (exit code {process.returncode}):\n{stderr or stdout}')
             if exit_on_error:
@@ -145,28 +150,34 @@ def submit(command, **kwargs):
         script = Path(kwargs.get('script', 'submit.sh')).resolve()
         logger.info(f'Generating submission script {script}')
         nodes = kwargs.get('nodes', 1)
-        ntasks_per_node = kwargs.get('ntasks_per_node', 1)
-        ntasks = kwargs.get('ntasks', 1)
+        ntasks_per_node = kwargs.get('ntasks_per_node', 0)
+        ntasks = kwargs.get('ntasks', 0)
         queue = kwargs.get('queue', '')
-        day = kwargs.get('day', 1)
         hour = kwargs.get('hour', 1)
-
+        
         with script.open('w') as o:
             o.write('#!/usr/bin/env bash\n')
             o.write('\n')
             o.write(f'#SBATCH --nodes={nodes}\n')
             o.write(f'#SBATCH --ntasks={ntasks}\n')
-            o.write(f'#SBATCH --ntasks-per-node={ntasks_per_node}\n')
-            o.write(f'#SBATCH --time={day}-{hour}:59\n')
-            o.write(f'#SBATCH --partition={queue}\n')
+            o.write(f'#SBATCH --time={hour}:00:00\n')
             
-            cpus_per_node = kwargs.get('cpus_per_node', '')
+            if ntasks_per_node:
+                o.write(f'#SBATCH --ntasks-per-node={ntasks_per_node}\n')
+            if queue:
+                o.write(f'#SBATCH --partition={queue}\n')
+            
+            cpus_per_node = kwargs.get('cpus_per_task', '')
             if cpus_per_node:
-                o.write(f'#SBATCH --cpus-per-node={cpus_per_node}\n')
+                o.write(f'#SBATCH --cpus-per-task={cpus_per_node}\n')
             
-            gpus_per_node = kwargs.get('gpus_per_node', '')
+            gpus_per_node = kwargs.get('gpus_per_task', '')
             if gpus_per_node:
-                o.write(f'#SBATCH --gpus-per-node={gpus_per_node}\n')
+                o.write(f'#SBATCH --gpus-per-task={gpus_per_node}\n')
+            
+            gres = kwargs.get('gres', '')
+            if gres:
+                o.write(f'#SBATCH --gres={gres}\n')
             
             array = kwargs.get('array', '')
             if array:
@@ -205,10 +216,13 @@ def submit(command, **kwargs):
             
             environments = kwargs.get('environments', [])
             if environments:
+                o.write('\n')
                 for environment in environments:
                     o.write(f'{environment}\n')
             
-            o.write(f'{cmd}\n\n')
+            if kwargs.get('fmt_cmds', False):
+                command = '\n\n'.join([format_cmd(c)[1] for c in command.split('\n\n\n')])
+            o.write(f'\n{command}\n')
         
         logger.info(f'Successfully generated submit script {script}')
         
@@ -236,6 +250,67 @@ def submit(command, **kwargs):
     except Exception as e:
         logger.error(f'Failed to generate submit script and submit the job due to\n{e}\n\n')
         return 1, 0
+
+
+def error_and_exit(message):
+    logger.error(message)
+    sys.exit(1)
+
+
+class File:
+    def __init__(self, path):
+        try:
+            if not Path(path).is_file():
+                error_and_exit(f'File {path} is not a file or does not exist')
+        except Exception as e:
+            error_and_exit(f'Check file {path} failed due to {e}')
+        self.path = Path(path).resolve()
+    
+    def __call__(self, *args, **kwargs):
+        return self.path
+    
+    def __getattr__(self, item):
+        return getattr(self.path, item)
+
+
+class Files:
+    def __init__(self, paths):
+        self.paths = [File(path) for path in paths]
+    
+    def __call__(self, *args, **kwargs):
+        return self.paths
+
+
+class Dir:
+    def __init__(self, path):
+        try:
+            if not Path(path).is_dir():
+                error_and_exit(f'Directory {path} is not a directory or does not exist')
+        except Exception as e:
+            error_and_exit(f'Check directory {path} failed due to {e}')
+        self.path = Path(path).resolve()
+    
+    def __call__(self, *args, **kwargs):
+        return self.path
+    
+    def __getattr__(self, item):
+        return getattr(self.path, item)
+
+
+class Exe:
+    def __init__(self, exe, exe_name='program'):
+        if exe:
+            p = run(f'which {exe}', log_cmd=False)
+            if p.returncode:
+                error_and_exit(f'Executable {exe} does not exist')
+            else:
+                exe = p.stdout.read().strip()
+        else:
+            error_and_exit(f'Path to {exe_name} executable is None, cannot continue')
+        self.exe = exe
+    
+    def __call__(self, *args, **kwargs):
+        return self.exe
 
 
 if __name__ == '__main__':
