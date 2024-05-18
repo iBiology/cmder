@@ -4,7 +4,7 @@
 """
 A shortcut for running shell command.
 """
-import argparse
+
 import subprocess
 import os
 import sys
